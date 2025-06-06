@@ -67,31 +67,17 @@ class EntityRecognition:
         """
         Parsea la respuesta de Gemini a un diccionario estructurado.
         """
-        try:
-            # Limpiar la respuesta (Gemini a veces añade marcas ```json)
-            clean_response = response_text.strip()
-            if clean_response.startswith("```json"):
-                clean_response = clean_response[7:]
-            if clean_response.endswith("```"):
-                clean_response = clean_response[:-3]
+        entities = self.model.clean_answer(response_text)
+        print("Entidades:", json.dumps(entities, indent=2, ensure_ascii=False))
+        
+        # Validar que contiene las claves esperadas
+        for entity_type in entity_types:
+            if entity_type._name not in entities:
+                entities[entity_type._name] = []
                 
-            # Parsear a JSON
-            entities = json.loads(clean_response)
-            print("Entidades:", json.dumps(entities, indent=2, ensure_ascii=False))
-            
-            # Validar que contiene las claves esperadas
-            for entity_type in entity_types:
-                if entity_type._name not in entities:
-                    entities[entity_type._name] = []
-                    
-            return entities
-            
-        except json.JSONDecodeError as e:
-            print(f"Error parseando la respuesta JSON: {e}")
-            print(f"Respuesta recibida: {response_text}")
-            return {"error": "Invalid JSON response", "raw_response": response_text}
-    
-
+        return entities
+        
+       
     def identify_entities(self, events: List[Event], entities: List[Entity]) -> str: 
         """
         Identifica entidades dadas en un texto narrativo.

@@ -1,5 +1,4 @@
 from enum import Enum
-import time
 from typing import Dict, List, Optional
 import json
 from ConversationalAgents.ConversationalAgent import ConversationalAgent
@@ -122,10 +121,9 @@ class RelationshipManager:
                 return rel
         return None
     
-    def infer_relationships_from_text(self, 
-                                    text: str,
+    def infer_relationships_from_text(self,                       
                                     existing_entities: List[str],
-                                    existing_events: List[str],
+                                    existing_events: List[Event],
                                     prompt_template: Optional[str] = None) -> List[Relationship]:
         """
         Infiere relaciones entre entidades a partir de un texto usando un modelo de lenguaje.
@@ -138,35 +136,46 @@ class RelationshipManager:
         Returns:
             Lista de relaciones inferidas
         """
-  
-        # Construir el prompt
-        prompt = self._build_relationship_prompt(text, existing_entities, prompt_template)
-        events_relation_prompt = self._build_events_relationship_prompt(text, existing_events)
-        # print(prompt)
-        # print(events_relation_prompt)
+        # Procesar eventos por chunks
+        all_event_relations = []
+        chunk_size = 10 if len(existing_events) > 50 else 5 
+        overlap = 3 if len(existing_events) > 50 else 2
         
-        try:
-            time.sleep(5)
-            # Hacer la llamada a la API
-            response = self.model.ask(prompt)
-            # print(response)
-            time.sleep(5)
-            response2 = self.model.ask(events_relation_prompt)
-            # print(response2)
+        # Dividir los eventos en chunks
+        for event_chunk in self.chunk_events(existing_events, chunk_size, overlap):
+            # Construir el prompt para el chunk actual de eventos
+            events_relation_prompt = self._build_events_relationship_prompt(event_chunk)
+
+            # Construir el prompt para entidades (si sigue siendo necesario)
+            prompt = self._build_relationship_prompt(event_chunk, existing_entities, prompt_template)
             
-            # Procesar la respuesta
-            new_relationships = self._parse_relationships_from_response(response)
-            new_events_relation = self._parse_events_relation_from_response(response2)
-            relations = new_relationships + new_events_relation
-            return relations
+            try:
+                # Hacer la llamada a la API para el chunk actual
+                response2 = self.model.ask(events_relation_prompt)
+                
+                # Procesar la respuesta del chunk actual
+                chunk_relations = self._parse_events_relation_from_response(response2)
+                all_event_relations.extend(chunk_relations)
+                
+            except Exception as e:
+                print(f"Error al procesar chunk de eventos: {e}")
+                continue
+        
+            try:
+                # Procesar las relaciones de entidades
+                response = self.model.ask(prompt)
+                new_relationships = self._parse_relationships_from_response(response)
+                
+                # Combinar todas las relaciones
+                all_event_relations.extend(new_relationships)
+                
+            except Exception as e:
+                print(f"Error al inferir relaciones de entidades: {e}")
+                return all_event_relations  # Devolver al menos las relaciones de eventos que sí se procesaron
             
-        except Exception as e:
-            print(f"Error al inferir relaciones: {e}")
-            return []
-    
-    def _build_events_relationship_prompt(self, 
-                                          text: str, 
-                                          events: List[str]) -> str:
+        return all_event_relations
+        
+    def _build_events_relationship_prompt(self, events: List[Event]) -> str:
         """
         Construye el prompt para inferir las relaciones entre los eventos.
         """
@@ -176,23 +185,21 @@ class RelationshipManager:
                 {{
                     relationships: [
                     {{
-                    "event1": "<primer evento>",
-                    "event2": "<segundo evento>",
+                    "event1": "<titulo del primer evento>",
+                    "event2": "<titulo del segundo evento>",
                     "relationship_type": "<Tipo de relación entre los eventos>"
                     }}
                 }}
                 In valid JSON format.
                 Consider only the following events and relationships:
-                Events:{[event for event in events]}
-                Relationships:["causal" (event1 causa el event2), "prereq" (event1 es un prerrequisito para event2), "trama" (event1 y event2 pertenecen a la misma trama o subtrama)]
-                From the following text:
-                ```{text}```
+                Events:{[f"title:{event.title} descripription: {event.description}" for event in events]}
+                Relationships:["causal" (event1 causa el event2), "prereq" (event1 es un prerrequisito para event2)]
                 """
         
         return prompt
 
     def _build_relationship_prompt(self, 
-                                 text: str, 
+                                 events: List[Event],
                                  entities: List[str],
                                  custom_template: Optional[str]) -> str:
         """
@@ -201,7 +208,7 @@ class RelationshipManager:
   
         # Usar template personalizado o el default
         if custom_template:
-            prompt = custom_template.format(text=text, entities_info="\n".join(entities))
+            prompt = custom_template.format(entities_info="\n".join(entities))
         else:
             prompt = f"""
                 Extract:
@@ -220,7 +227,7 @@ class RelationshipManager:
                 Consider only the following entities:
                 {[entity for entity in entities]}
                 From the following text:
-                ```{text}```
+                ```{[event.description for event in events]}```
                 """
         
         return prompt
@@ -309,3 +316,9 @@ class RelationshipManager:
         """
         response = self.model.clean_answer(self.model.ask(prompt))
         return response
+    
+
+    def chunk_events(self, events, chunk_size=10, overlap=2):
+        """Divide los eventos en chunks solapados para contexto continuo"""
+        for i in range(0, len(events), chunk_size - overlap):
+            yield events[i:i + chunk_size]

@@ -1,7 +1,9 @@
+from collections import deque
+import json
 import re
-import time
 from ConversationalAgents.ConversationalAgent import ConversationalAgent
 from ConversationalAgents.Gemini import Gemini
+from PlotMind.NarrativeGenerator import NarrativeGenerator
 from PlotMind.ContextRetrieval import ContextRetrieval
 from StoryGraphGenerator.EntityRecognition import EntityRecognition
 from StoryGraphGenerator.RelationshipManager import RelationshipManager
@@ -14,7 +16,6 @@ from StorySpace.Event import Event
 from StorySpace.Item import Item
 from StorySpace.Location import Location
 from typing import Dict, List
-import json
 import networkx as nx
 
 
@@ -60,7 +61,7 @@ class PlotMind:
             {{
                 "narrative_structure": estructura narrativa,
                 "gender": género (ej: fantasía, ciencia ficción),
-                "extension":(int) Número de párrafos o pasajes de la historia,
+                "extension":(int) Número de pasajes de la historia (puedes inferirlo si se menciona la extensión que se quiere),
                 "style": tono y estilo (ej: serio, humorístico, poético)
                 "rules": lista de reglas que el autor quiere que cumpla la historia
             }}
@@ -72,11 +73,14 @@ class PlotMind:
             #print(prompt)
             resp = self.model.ask(prompt)
 
-            data = clean_answer(resp)
+            data = self.model.clean_answer(resp)
             
             self.narrative_structure = data.get("narrative_structure", "Estructura básica")
             self.gender = data.get("gender", "Género no especificado")
-            self.extension = int(data.get("extension", "15"))
+            if data.get("extension") is None:
+                self.extension = 50
+            else:
+                self.extension = int(data.get("extension"))
             self.style = data.get("style", "Tono y estilo no especificado")
             self.rules = data.get("rules", [])
             
@@ -105,34 +109,67 @@ class PlotMind:
     
         for entity in extraction:
             if entity == "personajes":
-                for character in extraction[entity]:
-                    rm.append(character["name"])
-                    if character["name"] in self.characters.keys():
-                        self.characters[character["name"]].add_features(character)
-                    else:
-                        self.characters[character["name"]] = Character(**character)
+                if isinstance(extraction[entity],list):
+                    for character in extraction[entity]:
+                        rm.append(character["name"])
+                        if character["name"] in self.characters.keys():
+                            self.characters[character["name"]].add_features(character)
+                        else:
+                            self.characters[character["name"]] = Character(**character)
+                elif isinstance(extraction[entity],dict):
+                    for character in extraction[entity].values():
+                        rm.append(character["name"])
+                        if character["name"] in self.characters.keys():
+                            self.characters[character["name"]].add_features(character)
+                        else:
+                            self.characters[character["name"]] = Character(**character)
             elif entity == "eventos":
-                for event in extraction[entity]:
-                    e_rm.append(event['title'])
-                    events_meta.append(event)
-                    if event['title'] in self.graph.events.keys():
-                        self.graph.events[event["title"]].add_features(event)
-                    else:
-                        self.graph.add_event(event= Event(**event))
+                if isinstance(extraction[entity],list):
+                    for event in extraction[entity]:
+                        e_rm.append(event['title'])
+                        events_meta.append(event)
+                        if event['title'] in self.graph.events.keys():
+                            self.graph.events[event["title"]].add_features(event)
+                        else:
+                            self.graph.add_event(event= Event(**event))
+                elif isinstance(extraction[entity],dict):
+                    for event in extraction[entity].values():
+                        e_rm.append(event['title'])
+                        events_meta.append(event)
+                        if event['title'] in self.graph.events.keys():
+                            self.graph.events[event["title"]].add_features(event)
+                        else:
+                            self.graph.add_event(event= Event(**event))
             elif entity == "ubicaciones":
-                for location in extraction[entity]:
-                    rm.append(location["name"])
-                    if location["name"] in self.locations.keys():
-                        self.locations[location["name"]].add_features(location)
-                    else:
-                        self.locations[location["name"]] = Location(**location)
+                if isinstance(extraction[entity],list):
+                    for location in extraction[entity]:
+                        rm.append(location["name"])
+                        if location["name"] in self.locations.keys():
+                            self.locations[location["name"]].add_features(location)
+                        else:
+                            self.locations[location["name"]] = Location(**location)
+                elif isinstance(extraction[entity], dict):
+                    for location in extraction[entity].values():
+                        rm.append(location["name"])
+                        if location["name"] in self.locations.keys():
+                            self.locations[location["name"]].add_features(location)
+                        else:
+                            self.locations[location["name"]] = Location(**location)
             elif entity == "ítems":
-                for item in extraction[entity]:
-                    rm.append(item["name"])
-                    if item["name"] in self.items.keys():
-                        self.items[item["name"]].add_features(item)
-                    else:
-                        self.items[item["name"]] = Item(**item)
+                if isinstance(extraction[entity],list):
+                    for item in extraction[entity]:
+                        rm.append(item["name"])
+                        if item["name"] in self.items.keys():
+                            self.items[item["name"]].add_features(item)
+                        else:
+                            self.items[item["name"]] = Item(**item)
+                elif isinstance(extraction[entity],dict):
+                    for item in extraction[entity].values():
+                        rm.append(item["name"])
+                        if item["name"] in self.items.keys():
+                            self.items[item["name"]].add_features(item)
+                        else:
+                            self.items[item["name"]] = Item(**item)
 
         prompt = f"""
         Genera {self.extension} eventos narrativos coherentemente que sigan como estructura narrativa {self.narrative_structure}, con género {self.gender}, con tono {self.style}.
@@ -159,8 +196,8 @@ class PlotMind:
         """
 
         print(prompt)
-        resp = self.model.ask(prompt)
-        data = clean_answer(resp)
+        resp = self.model.ask(prompt, temperature=0.7)
+        data = self.model.clean_answer(resp)
         suggested_events = data.get("eventos_sugeridos", [])
         text = ""
         last_event = False
@@ -179,24 +216,33 @@ class PlotMind:
 
         # Mejorando el mundo de la historia según los eventos sugeridos
 
-        characters_data = clean_answer(self.dramaManager.impove_characters([character for character in self.characters.values()], text))
-        new_characters = characters_data.get("personajes", [])
+        characters_data = self.model.clean_answer(self.dramaManager.impove_characters([character for character in self.characters.values()], text))
+        if isinstance(characters_data, dict):
+            new_characters = characters_data.get("personajes", [])
+        else:
+            new_characters = characters_data
 
         for character in new_characters:
             self.characters[character["name"]] = Character(**character)
 
         # print("Nuevos personajes::", json.dumps(new_characters, indent=2, ensure_ascii=False))
 
-        locations_data = clean_answer(self.dramaManager.impove_locations([location for location in self.locations.values()], text))
-        new_locations = locations_data.get("ubicaciones", [])
+        locations_data = self.model.clean_answer(self.dramaManager.impove_locations([location for location in self.locations.values()], text))
+        if isinstance(locations_data, dict):
+            new_locations = locations_data.get("ubicaciones", [])
+        else:
+            new_locations = locations_data
 
         for location in new_locations:
             self.locations[location["name"]] = Location(**location)
 
         # print("Nuevas ubicaciones:", json.dumps(new_locations, indent=2, ensure_ascii=False))
 
-        items_data = clean_answer(self.dramaManager.impove_items([item for item in self.items.values()], text))
-        new_items = items_data.get("items", [])
+        items_data = self.model.clean_answer(self.dramaManager.impove_items([item for item in self.items.values()], text))
+        if isinstance(items_data, dict):
+            new_items = items_data.get("items", [])
+        else:
+            new_items = items_data
 
         for item in new_items:
             self.items[item["name"]] = Item(**item)
@@ -207,14 +253,9 @@ class PlotMind:
         self.update_entities_in_events(events=[e for e in self.graph.events.values()], entities=[character for character in self.characters.values()] + [location for location in self.locations.values()] + [item for item in self.items.values()])
 
         entities = [character for character in self.characters.keys()] + [location for location in self.locations.keys()] + [item for item in self.items.keys()]
-        events = []
-        text = ""
-        for name,event in self.graph.events.items():
-            events.append(name)
-            text += event.description
 
         print("Extrayendo relaciones...")
-        relations = self.relationshipsManager.infer_relationships_from_text(text, entities, events)
+        relations = self.relationshipsManager.infer_relationships_from_text(entities, list(self.graph.events.values()))
 
         # Añadir relaciones al grafo
         for relation in relations:
@@ -237,7 +278,6 @@ class PlotMind:
         #         if name in event.characters_involved:
         #             events_involved.append(event)
         #     self.characters[name] = self.dramaManager.simulate_character(character, events_involved)
-        #     time.sleep(3)
         #     print("Acciones :")
         #     print(self.characters[name].actions)
         #     print("Motivaciones :")
@@ -251,7 +291,6 @@ class PlotMind:
             updated_characters = self.dramaManager.simulate_event(event, [character for name,character in self.characters.items() if name in event.characters_involved])
             for character in updated_characters:
                 self.characters[character.name]= character
-            time.sleep(5)
         
         # Comprobando acciones de los personajes y tomando sugerencias para enriquecer la historia
         suggested_events_for_the_characters = []
@@ -280,20 +319,11 @@ class PlotMind:
         # Comprobar dependencias y relaciones entre el mundo de la historia y los eventos
         if not DependencyManager.is_multidigraph_dag(self.graph.graph):
             print("El grafo de eventos contiene ciclos o no es un DAG. No se pueden generar más eventos.")
-            # Revisar las relaciones entre los eventos
+            cycles = list(nx.simple_cycles(self.graph.graph))
+            print("Los ciclos encontrados son:")
+            for cycle in cycles:
+                print(f"Ciclo: {cycle}")
 
-        # Crear relaciones entre los personajes y los eventos en el grafo
-        for c in self.characters.values():
-            if len(c.actions) > 0:
-                self.graph.add_character(c)
-                self.graph.link_character_to_events(c.name, c.actions)
-
-        # Crear relaciones entre los items y los eventos en el grafo
-        for item in self.items.values():
-            self.graph.add_item(item)
-            for event in self.graph.events.values():
-                if item.name in event.items_involved:
-                    self.graph.link_item_to_event(item.name, event.title)
 
         # Visualizar el grafo
         print("\nVisualizando grafo de eventos...")
@@ -313,133 +343,179 @@ class PlotMind:
             min_samples=3 if self.extension < 50 else 5
         )
 
-        # Crear mapeo de nodo a cluster_id
-        node_to_cluster = {
-            node: clustering_result['labels'][i] 
-            for i, node in enumerate(self.graph.graph.nodes())
-        }
+        for clus,info in clustering_result['cluster_details'].items():
+            print(f"Cluster {clus} tiene {info['size']} eventos.")
+            print(f"Eventos en el cluster: {info['sample_titles']}")
 
-        for sg in subgraphs:
-            # Obtener clusters únicos de los nodos en este subgrafo
-            cluster_ids = {node_to_cluster[node] for node in sg.nodes}
-            
-            # Considerar válido si:
-            # 1. Todos están en el mismo cluster (excluyendo ruido -1), o
-            # 2. Hay un solo cluster_id no-ruido y el resto son ruido (-1)
-            non_noise_clusters = {cid for cid in cluster_ids if cid != -1}
-            
-            if len(non_noise_clusters) == 1:
-                valid_subplots.append(sg)
-            
-        for subplot in valid_subplots:
-            events_description = []
-            for node in subplot.nodes:
-                event = self.graph.events.get(node, None)
-                if event:
-                    events_description.append(event.description)
-            print(self.relationshipsManager.verify_subplot(events_description))
+        if len(clustering_result) > 1:
+            # Crear mapeo de nodo a cluster_id
+            node_to_cluster = {
+                node: clustering_result['labels'][i] 
+                for i, node in enumerate(self.graph.graph.nodes)
+            }
+
+            for sg in subgraphs:
+                # Obtener clusters únicos de los nodos en este subgrafo
+                cluster_ids = {node_to_cluster[node] for node in sg.nodes}
+                
+                # Considerar válido si:
+                # 1. Todos están en el mismo cluster (excluyendo ruido -1), o
+                # 2. Hay un solo cluster_id no-ruido y el resto son ruido (-1)
+                non_noise_clusters = {cid for cid in cluster_ids if cid != -1}
+                
+                if len(non_noise_clusters) == 1:
+                    valid_subplots.append(sg)
+                
+            for subplot in valid_subplots:
+                events_description = []
+                for node in subplot.nodes:
+                    event = self.graph.events.get(node, None)
+                    if event:
+                        events_description.append(event.description)
+                print(self.relationshipsManager.verify_subplot(events_description))
                     
 
-        return
+        # Crear relaciones entre los personajes y los eventos en el grafo
+        for c in self.characters.values():
+            if len(c.actions) > 0:
+                self.graph.add_character(c)
+                self.graph.link_character_to_events(c.name, c.actions)
+
+        # Crear relaciones entre los items y los eventos en el grafo
+        for item in self.items.values():
+            self.graph.add_item(item)
+            for event in self.graph.events.values():
+                if item.name in event.items_involved:
+                    self.graph.link_item_to_event(item.name, event.title)
 
 
-
-
-
-        last_events = self.graph.get_last_events(3)
-        characters_involved = []
-        places_involved = []
-        items_involved = []
-
-        for e in last_events:
-            characters_involved.extend([c for c in self.graph.events[e].characters_involved if c not in characters_involved])
-            places_involved.extend([p for p in self.graph.events[e].locations if p not in places_involved])
-            items_involved.extend([i for i in self.graph.events[e].items_involved if i not in items_involved])
-
-        history_events = self.context_retriever.get_context(last_events, k=3, m=3)
-
-        # print("Eventos recientes:")
-        # print(last_events)
-
-        # print("Personajes involucrados:")
-        # print(characters_involved)
-
-        # print("Lugares involucrados:")
-        # print(places_involved)
-
-        # print("Items involucrados:")
-        # print(items_involved)
-
-        # print("Eventos históricos relevantes:")
-        # print(history_events)
+        # Generar el texto narrativo 
+        plot=list(self.graph.events.values())
+        characters_introduced = {character.name : False for character in self.characters.values()}
+        locations_introduced = {location.name : False for location in self.locations.values()}
+        items_introduced = {item.name : False for item in self.items.values()}
+        events_introduced = {event.title : False for event in self.graph.events.values()}
+        window = deque(maxlen=3) 
 
         prompt = f"""
-            Eres un narrador experto en historias interactivas. Tu misión es generar eventos narrativos coherentes basados en:
-            -El estado actual del mundo (eventos recientes, personajes, lugares, items).
-            -El contexto histórico (eventos pasados relevantes).
-            -La estructura narrativa definida, el género y el estilo, los eventos restantes para concluir la historia.
-            -Reglas que debes tener en cuenta para generar los eventos.
-            Información de la historia:
-            {{ 
-                "mundo_actual": {{ 
-                    "eventos": {[self.graph.events[event].to_dict() for event in last_events if event in self.graph.events]},
-                    "personajes": {[self.characters[character].to_dict() for character in characters_involved if character in self.characters]},
-                    "lugares": {[self.locations[place].to_dict() for place in places_involved if place in self.locations]},
-                    "items": {[self.items[item].to_dict() for item in items_involved if item in self.items]}
-                }},  
-                "contexto_histórico": {{  
-                    "eventos_pasados": {[self.graph.events[event_data["text"]].to_dict() for event_data in history_events if event_data["text"] in self.graph.events]}
-                }},  
-                "estructura": {{  
-                    "tipo": {self.narrative_structure},
-                    "género": {self.gender},
-                    "style": {self.style},
-                    "eventos_restantes": {self.extension}
-                }},
-                "reglas": {[rule for rule in self.rules]}
-            }}
-            Analiza el contexto histórico y el estado actual del mundo de la historia.
-            Genera 3 eventos que den continuidad a la historia, que:
-            -Sean lógicos dado el estado actual de la historia.
-            -Avancen la trama según los eventos restantes y encajen en la estructura narrativa.
-            -Respeten las reglas definidas.
-            Devuelve solo un JSON válido, sin comentarios adicionales con los posibles eventos, de la siguiente forma: 
-            {{  
-                "eventos_sugeridos": [  
-                    {{  
-                        title: Título del evento
-                        description: Descripción detallada del evento, con elementos narrativos
-                        prerequisites: Lista de eventos que deben ocurrir antes de este evento
-                        effects: Cambios que produce este evento
-                    }}  
-                ]
-            }}
+            Eres un narrador experto de historias. Tu misión es generar un texto narrativo que describa el siguiente evento con el que comienza la historia.
+            El evento se titula {plot[0].title} y se describe como: {plot[0].description}
+            Puedes introducir las ubicaciones, personajes e items haciendo breves descripciones de ellos ya que se presentan por primera vez, según consideres para no cargar el texto.
+            Las ubicaciones son: {[location.to_dict() for location in self.locations.values() if location.name in plot[0].locations]}
+            Los personajes son: {[character.to_dict() for character in self.characters.values() if character.name in plot[0].characters_involved]}
+            Los items son: {[item.to_dict() for item in self.items.values() if item.name in plot[0].items_involved]}
+            La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {plot[0].narrative_part}.
         """
+        
+        if self.gender is not None:
+            prompt += f"El género de la historia es {self.gender}."
+        if self.style is not None:
+            prompt += f"El estilo de la historia es {self.style}."
+        if len(self.rules) > 0:
+            prompt += f"Ten en cuenta los siguientes deseos del autor: {', '.join(self.rules)}."
+        prompt += "Devuelve solo el texto narrativo como se presentaría al lector, sin comentarios adicionales y en español."
 
-        # print("Prompt que se proporciona como contexto:")
-        # print(prompt)
+        # Marcar los personajes, ubicaciones e items introducidos en el texto
+        for c in plot[0].characters_involved:
+            if c in characters_introduced:
+                characters_introduced[c] = True
+        for l in plot[0].locations:
+            if l in locations_introduced:
+                locations_introduced[l] = True
+        for i in plot[0].items_involved:
+            if i in items_introduced:
+                items_introduced[i] = True
 
-        resp = self.model.ask(prompt)
+        events_introduced[plot[0].title] = True
+        plot[0].description = self.model.ask(prompt, response_mime_type="text/plain")
+        window.append(plot[0])
+      
+        for event in plot[1:-1]:
+            window.append(event)
+            context = self.context_retriever.get_context([e.title for e in window])
+            prompt = f"""
+                Eres un narrador experto de historias. Tu misión es generar un texto narrativo coherente para el siguiente evento.
+                El evento se titula {event.title} y se describe como: {event.description}
+                Redacta el texto de manera que sea coherente con el texto de los eventos anteriores, que es:
+                {", ".join([f"{e.description}" for e in window[:-1]])}
+                Puedes introducir las ubicaciones, personajes e items haciendo breves descripciones de ellos ya que se presentan por primera vez, según consideres para no cargar el texto.
+                Las ubicaciones son: {[location.to_dict() for location in self.locations.values() if (location.name in event.locations and not locations_introduced[location.name])]}
+                Los personajes son: {[character.to_dict() for character in self.characters.values() if (character.name in event.characters_involved and not characters_introduced[character.name])]}
+                Los items son: {[item.to_dict() for item in self.items.values() if (item.name in event.items_involved and not items_introduced[item.name])]}
+                La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {event.narrative_part}.
+            """
 
-        data = clean_answer(resp)
+            # Eventos relacionados con el actual que ya se han escrito
+            past_context = [c for c in context if events_introduced[c['metadata']['title']]]
 
-        suggested_events = data.get("eventos_sugeridos", [])
+            if len(past_context) > 0:
+                prompt += f"A continuacion se describen eventos anteriores que pueden ser relevantes para el contexto de este evento: {', '.join([c['text'] for c in past_context])}.\n"
 
-        user_input = ""
-        for e in suggested_events:
-            self.graph.add_event(Event(**e) )
-            print(e)
-            print("\n")
-            user_input += e["description"] + "\n"
+            # Eventos que aún no se han introducido en la historia
+            future_context = [c for c in context if not events_introduced[c['metadata']['title']]]
 
-        next_step = input("¿Quieres continuar con la historia? (s/n): ")
+            if len(future_context) > 0:
+                prompt += f"Eventos que van a ocurrir en el futuro (no mencionar directamente): {', '.join([c['text'] for c in future_context])}.\n"
 
-        self.extension -= len(suggested_events)
+            prompt += f"La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {event.narrative_part}."
 
-        for title,event in self.graph.events.items():
-            print(title)
-            print(event.description)
-            print("\n")
+            if self.gender is not None:
+                prompt += f"El género de la historia es {self.gender}."
+            if self.style is not None:
+                prompt += f"El estilo de la historia es {self.style}."
+            if len(self.rules) > 0:
+                prompt += f"Ten en cuenta los siguientes deseos del autor: {', '.join(self.rules)}."
+            prompt += "Devuelve solo el texto narrativo como se presentaría al lector, sin comentarios adicionales y en español."
+
+            # Marcar los personajes, ubicaciones e items introducidos en el texto
+            for c in event.characters_involved:
+                if c in characters_introduced:
+                    characters_introduced[c] = True
+            for l in event.locations:
+                if l in locations_introduced:
+                    locations_introduced[l] = True
+            for i in event.items_involved:
+                if i in items_introduced:
+                    items_introduced[i] = True
+            events_introduced[event.title] = True
+
+            event.description = self.model.ask(prompt, response_mime_type="text/plain")
+            
+        # Añadir el último evento
+        last_event = plot[-1]
+        window.append(last_event)
+        context = self.context_retriever.get_context([e.title for e in window])
+
+        prompt = f"""
+            Eres un narrador experto de historias. Tu misión es generar un texto narrativo coherente para el último evento de una historia.
+            El evento se titula {last_event.title} y se describe como: {last_event.description}
+            Redacta el texto de manera que sea coherente con el texto de los eventos anteriores, que es:
+            {", ".join([f"{e.description}" for e in window[:-1]])}
+            Las ubicaciones, personajes e items que aparecen en el evento se desciben a continuación.
+            Las ubicaciones son: {[location.to_dict() for location in self.locations.values() if location.name in last_event.locations]}
+            Los personajes son: {[character.to_dict() for character in self.characters.values() if character.name in last_event.characters_involved]}
+            Los items son: {[item.to_dict() for item in self.items.values() if item.name in last_event.items_involved]}
+            La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {last_event.narrative_part}.
+        """
+        prompt += f"A continuacion se describen eventos anteriores que pueden ser relevantes para el contexto de este evento: {', '.join([c['text'] for c in context])}.\n"
+
+        if self.gender is not None:
+            prompt += f"El género de la historia es {self.gender}."
+        if self.style is not None:
+            prompt += f"El estilo de la historia es {self.style}."
+        if len(self.rules) > 0:
+            prompt += f"Ten en cuenta los siguientes deseos del autor: {', '.join(self.rules)}."
+        prompt += "Devuelve solo el texto narrativo como se presentaría al lector y que dará fin a la historia, sin comentarios adicionales y en español."
+
+        plot[-1].description = self.model.ask(prompt, response_mime_type="text/plain")	
+
+
+        # Guardar la historia en un archivo de texto
+        story = "".join([e.description for e in plot])	
+
+        with open("stories.txt", "w", encoding="utf-8") as archivo:
+            archivo.write(story)
+
 
 
     def update_entities_in_events(self, events: List[Event], entities: List[Entity]) -> None:
@@ -450,7 +526,7 @@ class PlotMind:
         # Relacionar entidades y eventos
         entities_in_events = self.recognizer.identify_entities(events,entities)
 
-        entities_in_events = clean_answer(entities_in_events)
+        entities_in_events = self.model.clean_answer(entities_in_events)
         entities_in_events = entities_in_events.get("events", [])
         self.graph = GraphGenerator()
         for e in entities_in_events:
@@ -459,43 +535,4 @@ class PlotMind:
             print("\n")
         return
     
-            
-
-def clean_answer(answer: str) -> Dict:
-    """
-    Limpia la respuesta del modelo para eliminar caracteres innecesarios.
-    Args:
-        answer: Respuesta cruda del modelo.
-    Returns:
-        Respuesta limpia.
-    """
-    # try:
-    #     # Limpiar la respuesta
-    #     clean_response = (answer).strip()
-    #     if clean_response.startswith("```json"):
-    #         clean_response = clean_response[7:]
-    #     if clean_response.endswith("```"):
-    #         clean_response = clean_response[:-3]
-            
-    #     # Parsear JSON
-    #     return json.loads(clean_response)
-    # except (json.JSONDecodeError, KeyError) as e:
-    #     print(f"Error limpiando respuesta: {e}")
-    #     print(f"Respuesta recibida: {answer}")
-    #     return {}
-    try:
-        # Limpieza robusta (incluye casos con '```json' y '```' en líneas separadas)
-        clean_response = re.sub(r'^```json|```$', '', answer.strip(), flags=re.DOTALL).strip()
         
-        # Parsear y validar
-        parsed = json.loads(clean_response)
-        return parsed
-    except json.JSONDecodeError as e:
-        print(f"Error de JSON (posible respuesta corrupta): {e}")
-        print(f"Contenido problemático (50 chars alrededor del error):")
-        error_pos = e.pos
-        print(clean_response[max(0, error_pos-25):error_pos+25])  # Contexto del error
-        return {}
-    except Exception as e:
-        print(f"Error inesperado: {e}")
-        return {}

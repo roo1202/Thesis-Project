@@ -1,4 +1,3 @@
-from ConversationalAgents.DeepSeek import DeepSeek
 from PlotMind.PlotMind import PlotMind
 
 if __name__ == "__main__":
@@ -7,14 +6,35 @@ if __name__ == "__main__":
     
     # Texto narrativo de ejemplo
     SAMPLE_TEXT = """
-    La carta llegó un martes de lluvia, cuando el reloj de la torre marcaba una hora que no existía.
-    El sobre, amarillento por el tiempo, llevaba mi nombre escrito en una caligrafía que reconocí al instante: la de Daniel Hargrove, mi abuelo, desaparecido veinte años atrás en circunstancias que aún helaban las reuniones familiares. Lo extraño no era que me escribiera después de dos décadas, sino que la fecha del matasellos coincidiera con ayer.
-    Al abrirlo, solo encontré una llave oxidada y una fotografía en blanco y negro. En ella, nuestro viejo caserón familiar aparecía con una puerta que jamás había existido: un arco de piedra tallada con símbolos que se retorcían como serpientes bajo la luz de la luna. Lo peor no fue lo imposible de la imagen, sino el detalle que noté al inclinarla. Alguien había tachado con tinta roja los rostros de todos los retratados, incluido el mío.
-    Y entonces, el teléfono sonó. Del otro lado, solo se escuchaba una voz susurrante que repetía tres palabras:
-    "Ya es tarde."
-    El reloj de la torre volvió a dar la hora. Esta vez, las agujas giraban al revés.
-
     La literatura no es un mero juego de palabras; lo que importa es lo que no queda dicho, o lo que puede ser leído entre líneas
+
+    Narración en tercera persona limitada (saltando entre los protagonistas).
+    Tonos crudos y poéticos, con diálogos cortantes y descripciones vívidas.
+    Giros dramáticos: Muertes inesperadas, traiciones y revelaciones que redefinen la trama.
+    Escribe 50 capítulos de esta historia, intercalando las perspectivas de Aric, Lysara y Tharion. Muestra cómo sus tramas colisionan durante un banquete en Vortheas, donde un asesinato desencadena una crisis política. Incluye símbolos recurrentes (como un cuervo con ojos de plata) y diálogos que insinúen la profecía.
+
+    En el continente fracturado de Etherion, donde reinos antiguos se desmoronan bajo el peso de la ambición, la traición y fuerzas sobrenaturales, cinco protagonistas luchan por sobrevivir, gobernar o destruir un mundo al borde del caos. Sus destinos se entrelazan a través de guerras, alianzas frágiles y secretos ancestrales.
+    Personajes Principales:
+    Aric de Valderrák (El Rey Destronado):
+    Último heredero de un reino conquistado, vive exiliado mientras recluta un ejército de mercenarios y nobles descontentos para recuperar su trono.
+    Trama: Deberá elegir entre su sed de venganza o salvar a Etherion de una amenaza mayor.
+    Lysara Valtys (La Tejedora de Sombras):
+    Espía maestra y bastarda de una casa noble, manipula las cortes desde las sombras. Sabe un secreto que podría incendiar los Siete Reinos.
+    Trama: Su lealtad se divide entre su familia y una sociedad secreta que busca controlar el mundo.
+    Tharion el Maldito (El Guerrero de los Abismos):
+    Un general condenado por un ritual oscuro, ahora lleva una armadura viviente que consume su humanidad. Comanda un ejército de no muertos.
+    Trama: Busca redimirse o arrastrar a todos a su condena.
+    Elia de las Brumas (La Bruja de los Hielos):
+    Joven sacerdotisa de un dios olvidado, descubre que su magia proviene de una entidad primordial que desea ser liberada.
+    Trama: Debe decidir si usar su poder para sanar o destruir.
+    Kael the Ironmonger (El Mercader de Guerra):
+    Un comerciante sin escrúpulos que financia ambos bandos de la guerra. Su red de intrigas es clave para el control de Etherion.
+    Trama: Un asesinato lo obliga a huir, revelando una conspiración que él mismo ayudó a crear.
+    Tramas Principales:
+    La Guerra de los Cinco Cuervos: Tres casas nobles se disputan el trono vacante de la capital, Vortheas, mientras facciones ocultas manipulan el conflicto.
+    El Despertar de los Primigenios: Criaturas antiguas, selladas bajo las montañas, comienzan a influir en los sueños de los poderosos.
+    La Profecía del Eclipse Sangriento: Un evento cósmico que podría cambiar el balance de poder para siempre.
+
 
     """
 
