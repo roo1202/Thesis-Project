@@ -177,8 +177,8 @@ class ContextRetrieval:
                 meta.get(key) == value for key, value in filter_rules.items()
             )
         
-        if len(events) <= m:
-            return [{"text": e} for e in events]
+        # if len(events) <= m:
+        #     return [{"text": e} for e in events]
             
         return self.retrieve_similar_events(tuple(events), k=k, filter_func=filter_func)
     

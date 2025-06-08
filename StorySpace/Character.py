@@ -193,3 +193,37 @@ class Character (Entity):
                     output.append(f"  · {attr.replace('_', ' ').title()}: {value}")
         
         return "\n".join(output)
+    
+
+    def describe_character_with_event(self, evento):
+        personality_str = ""
+        if isinstance(self.personality, dict):
+            personality_str = "\n".join([f"  - {trait}: {desc}" for trait, desc in self.personality.items()])
+
+        descripcion = (
+            f"Nombre: {self.name}\n"
+            f"Rol: {self.role}\n"
+            f"Personalidad:\n{personality_str}\n"
+            f"Antecedentes: {self.background}\n"
+            f"Apariencia: {self.appearance}\n"
+            f"Fortalezas: {', '.join(self.strengths) if self.strengths else 'Ninguna'}\n"
+            f"Debilidades: {', '.join(self.flaws) if self.flaws else 'Ninguna'}\n"
+        )
+        
+        # Añadir motivaciones, metas y acciones según el evento
+        if evento in self.motivations:
+            descripcion += f"\nMotivaciones en '{evento}': {self.motivations[evento]}\n"
+        else:
+            descripcion += f"\nMotivaciones en '{evento}': No especificadas\n"
+        
+        if evento in self.goals:
+            descripcion += f"Metas en '{evento}': {self.goals[evento]}\n"
+        else:
+            descripcion += f"Metas en '{evento}': No especificadas\n"
+        
+        if evento in self.actions:
+            descripcion += f"Acciones en '{evento}': {self.actions[evento]}\n"
+        else:
+            descripcion += f"Acciones en '{evento}': No especificadas\n"
+        
+        return descripcion

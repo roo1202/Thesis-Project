@@ -30,7 +30,6 @@ class Relationship:
     def to_dict(self) -> Dict:
         """Serializa la relación a un diccionario"""
         return {
-            "relationship_id": self.relationship_id,
             "entity1": self.entity1,
             "entity2": self.entity2,
             "relationship_type": self.relationship_type

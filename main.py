@@ -8,34 +8,6 @@ if __name__ == "__main__":
     SAMPLE_TEXT = """
     La literatura no es un mero juego de palabras; lo que importa es lo que no queda dicho, o lo que puede ser leído entre líneas
 
-    Narración en tercera persona limitada (saltando entre los protagonistas).
-    Tonos crudos y poéticos, con diálogos cortantes y descripciones vívidas.
-    Giros dramáticos: Muertes inesperadas, traiciones y revelaciones que redefinen la trama.
-    Escribe 50 capítulos de esta historia, intercalando las perspectivas de Aric, Lysara y Tharion. Muestra cómo sus tramas colisionan durante un banquete en Vortheas, donde un asesinato desencadena una crisis política. Incluye símbolos recurrentes (como un cuervo con ojos de plata) y diálogos que insinúen la profecía.
-
-    En el continente fracturado de Etherion, donde reinos antiguos se desmoronan bajo el peso de la ambición, la traición y fuerzas sobrenaturales, cinco protagonistas luchan por sobrevivir, gobernar o destruir un mundo al borde del caos. Sus destinos se entrelazan a través de guerras, alianzas frágiles y secretos ancestrales.
-    Personajes Principales:
-    Aric de Valderrák (El Rey Destronado):
-    Último heredero de un reino conquistado, vive exiliado mientras recluta un ejército de mercenarios y nobles descontentos para recuperar su trono.
-    Trama: Deberá elegir entre su sed de venganza o salvar a Etherion de una amenaza mayor.
-    Lysara Valtys (La Tejedora de Sombras):
-    Espía maestra y bastarda de una casa noble, manipula las cortes desde las sombras. Sabe un secreto que podría incendiar los Siete Reinos.
-    Trama: Su lealtad se divide entre su familia y una sociedad secreta que busca controlar el mundo.
-    Tharion el Maldito (El Guerrero de los Abismos):
-    Un general condenado por un ritual oscuro, ahora lleva una armadura viviente que consume su humanidad. Comanda un ejército de no muertos.
-    Trama: Busca redimirse o arrastrar a todos a su condena.
-    Elia de las Brumas (La Bruja de los Hielos):
-    Joven sacerdotisa de un dios olvidado, descubre que su magia proviene de una entidad primordial que desea ser liberada.
-    Trama: Debe decidir si usar su poder para sanar o destruir.
-    Kael the Ironmonger (El Mercader de Guerra):
-    Un comerciante sin escrúpulos que financia ambos bandos de la guerra. Su red de intrigas es clave para el control de Etherion.
-    Trama: Un asesinato lo obliga a huir, revelando una conspiración que él mismo ayudó a crear.
-    Tramas Principales:
-    La Guerra de los Cinco Cuervos: Tres casas nobles se disputan el trono vacante de la capital, Vortheas, mientras facciones ocultas manipulan el conflicto.
-    El Despertar de los Primigenios: Criaturas antiguas, selladas bajo las montañas, comienzan a influir en los sueños de los poderosos.
-    La Profecía del Eclipse Sangriento: Un evento cósmico que podría cambiar el balance de poder para siempre.
-
-
     """
 
     t = "quiero que tenga 20 pasajes, hayan muchos giros inesperados y muchos objetos reveladores y para despistar"
@@ -44,3 +16,47 @@ if __name__ == "__main__":
     pm.run()
 
  
+    text = """
+
+    En este capítulo se detalla el proceso de implementación del sistema de generación automática de historias desarrollado. Se presentan las decisiones de diseño arquitectónico, las clases principales que componen el sistema, así como los algoritmos y técnicas específicas empleadas. La arquitectura del sistema se implementó siguiendo los componentes del modelo conceptual, de manera que por cada componente se desarrolló un módulo independiente, permitiendo flexibilidad y escalabilidad al modelo.
+
+    StorySpace:
+
+    En el mundo o espacio de la historia, se definen las clases que caracterizan a cada una de las entidades que intervienen en la misma. Se define como base la clase Entity para definir algunos comportamientos en común, y sus herederas:
+    
+    -Character: Representa un personaje en la historia, con atributos estáticos como el nombre, el rol, la personalidad, la historia del personaje y su apariencia. Posee otros atributos como sus metas, motivaciones y acciones, que se almacenan en diccionarios cuya llave es el nombre del evento en que se presentan.
+
+    -Location: Representa una ubicación dentro de la historia. El lugar se describe por un nombre, una descripción, una historia, referencias a lugares que conectan con el mismo, etc.
+
+    -Item: Representa un objeto de la historia con nombre, tipo de objeto, descripción, propiedades que posee, efectos en los personajes o el mundo, habilidades que requiera su uso, etc.
+
+    -Event: Representa un evento de la historia con atributos como: un título, una descripción del evento o acontecimiento, referencias al lugar donde se desarrolla el evento y otras ubicaciones que se mencionen, referencias a personajes y objetos involucrados, efectos en el mundo de la historia, etc.
+
+    Story Graph Generator :
+
+    El módulo del Generador del grafo de la historia está conformado por tres clases que se encargan de construir el grafo inicial: EntityRecognition, RelationshipManager y GraphGenerator.
+
+    GraphGenerator: 
+    Esta clase se inicializa creando un multigrafo con la biblioteca networkx, en el que se añaden los nodos de eventos a medida que se generan, además de los distintos arcos que pueden existir entre estos. Posteriormente, se incluyen y se vinculan a los vértices de eventos nuevos nodos de personajes, objetos y lugares para ciertos análisis de trama que se explicarán más adelante. Mediante el método visualize_graph se muestra una interfaz interactiva del grafo usando la biblioteca pyvis.
+
+    EntityRecognition:
+    Se encarga de la extracción de entidades en textos, mediante la interacción con un agente conversacional. Métodos como: extract_entities e indentify_entities se encargan de extraer información estructurada del texto en lenguaje natural. Se generan prompts dinámicos para especificar al agente los personajes, objetos, ubicaciones y eventos a extraer, además de la estructura deseada.
+
+    RelationshipManager:
+    Clase encargada de inferir y almacenar las relaciones entre los eventos y las entidades.  Se crean prompts dinámicos al igual que en EntityRecognition, y se almacenan las relaciones de manera eficiente para facilitar la búsqueda posterior por entidades. Además de esta, se definen clases como Relationship y EntityRelationship para describir la relación con ciertos atributos.
+
+    DramaManager:
+
+    El gestor de drama es el encargado de añadir elementos y enriquecer la trama de la historia. Cuenta con metodos como: improve_characters, improve_locations e improve_items; encargados de mejorar y completar los personajes, las ubicaciones y los objetos respectivamente. Dada la historia -en el punto de generacion que se encuentre- y las entidades que se quieren expandir, se crean prompts donde se describen las caracteristicas que ya poseen estas entidades y las que se quieren generar, tomando como guia la historia para que se generen a corde a esta.
+
+    Se siguieron dos enfoques para la simulaciones de los personajes en la historia. Un enfoque se desarrolla mediante el metodo simulate_character, que simula el comportamiento del personaje en una secuencia de eventos, conociendo todas las caracteristicas del personaje y la descripcion del suceso o evento. Otro enfoque fue mediante el metodo simulate_event, que simula el comportamiento de todos los personajes que intervienen en un evento dado. En este no se conoce el proximo evento, ya que se simula uno a la vez, pero sí se conocen las metas, motivaciones y acciones pasadas de los personajes.
+
+    Para el chequeo de coherencia en los arcos dramaticos de los personajes se implemento el metodo check_character_actions, el cual devuelve un nivel de coherencia para las acciones de cada personaje, conociendo sus motivaciones y metas. Tambien sugiere modificaciones en el comportamiento del personaje ante algunos eventos y nuevos eventos para añadir a la trama, que permitan un mayor desarrollo del personaje. Estos eventos son tenidos en cuenta para balancear la trama con los objetivos de los personajes.
+
+    Cada personaje puede sugerir nuevos eventos al grafo de la historia, pero no todos son elegidos, ya que dichos eventos pueden ser contradictorios respecto a la trama principal o a los objetivos del autor (por ejemplo el antagonista puede sugerir eventos donde mate al protagonista). Para seleccionar de estos eventos los que realmente aportan a la trama sin crear contradicciones, se usa el metodo select_significant_events, que contextualiza al agente conversacional con la historia y los eventos sugeridos.
+
+    Finalmente se recorren los eventos de la trama y se añade a la descripcion de algunos de ellos anotaciones de elementos narrativos segun sea conveniente con el tono, el estilo y el genero de la historia para posteriorimente generar el texto narrativo.
+
+    DependencyManager
+
+    """

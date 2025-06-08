@@ -17,12 +17,11 @@ class Gemini (ConversationalAgent):
         self.client = genai.Client(api_key=api_key)
         
 
-    def ask(self, prompt: str, temperature: float = 0.5, response_mime_type='application/json') -> str:
-        time.sleep(8)
+    def ask(self, prompt: str, temperature: float = 0.5) -> str:
+        time.sleep(5)
         response = self.client.models.generate_content(
                 model= self.model, contents=prompt,
                 config=types.GenerateContentConfig(
-                    response_mime_type=response_mime_type,
                     temperature=temperature)
         )
         return response.text

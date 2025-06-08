@@ -3,7 +3,6 @@ import json
 import re
 from ConversationalAgents.ConversationalAgent import ConversationalAgent
 from ConversationalAgents.Gemini import Gemini
-from PlotMind.NarrativeGenerator import NarrativeGenerator
 from PlotMind.ContextRetrieval import ContextRetrieval
 from StoryGraphGenerator.EntityRecognition import EntityRecognition
 from StoryGraphGenerator.RelationshipManager import RelationshipManager
@@ -84,19 +83,6 @@ class PlotMind:
             self.style = data.get("style", "Tono y estilo no especificado")
             self.rules = data.get("rules", [])
             
-            user_input = input("""
-                Para ayudarte a desarrollar una narrativa sólida, necesito que me compartas todo lo que puedas sobre el proyecto que tienes en mente. 
-                No importa si son ideas sueltas o detalles muy específicos: cada pieza es valiosa.
-                Puedes incluir:
-                Personajes principales: Nombres, roles, personalidades, motivaciones.
-                Mundo narrativo: ¿Es realista, mágico, futurista? ¿Hay reglas especiales (ej: magia, tecnología)?
-                Conflicto central: ¿Qué problema impulsa la historia? (ej: una guerra, un misterio, un viaje).
-                Extras: Escenas clave que ya imaginas, temas que quieres explorar (ej: redención, identidad), o preguntas sin resolver.
-                            
-                No te preocupes por el orden o la coherencia en esta etapa. 
-                ¡Aquí lo importante es capturar tu visión! Una vez que me compartas estos detalles, 
-                trabajaremos juntos para darle forma.
-            """)
         else:
             user_input = input("Escribe algo más sobre tu historia: ")
         
@@ -324,11 +310,6 @@ class PlotMind:
             for cycle in cycles:
                 print(f"Ciclo: {cycle}")
 
-
-        # Visualizar el grafo
-        print("\nVisualizando grafo de eventos...")
-        self.graph.visualize_graph()
-
         
         # Generar embeddings de texto para los eventos
         self.context_retriever.add_events(list(self.graph.events.values()))
@@ -389,6 +370,11 @@ class PlotMind:
                     self.graph.link_item_to_event(item.name, event.title)
 
 
+        # Visualizar el grafo
+        print("\nVisualizando grafo de eventos...")
+        self.graph.visualize_graph()
+
+
         # Generar el texto narrativo 
         plot=list(self.graph.events.values())
         characters_introduced = {character.name : False for character in self.characters.values()}
@@ -402,7 +388,7 @@ class PlotMind:
             El evento se titula {plot[0].title} y se describe como: {plot[0].description}
             Puedes introducir las ubicaciones, personajes e items haciendo breves descripciones de ellos ya que se presentan por primera vez, según consideres para no cargar el texto.
             Las ubicaciones son: {[location.to_dict() for location in self.locations.values() if location.name in plot[0].locations]}
-            Los personajes son: {[character.to_dict() for character in self.characters.values() if character.name in plot[0].characters_involved]}
+            Los personajes son: {[character.describe_character_with_event(plot[0].title) for character in self.characters.values() if character.name in plot[0].characters_involved]}
             Los items son: {[item.to_dict() for item in self.items.values() if item.name in plot[0].items_involved]}
             La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {plot[0].narrative_part}.
         """
@@ -427,7 +413,8 @@ class PlotMind:
                 items_introduced[i] = True
 
         events_introduced[plot[0].title] = True
-        plot[0].description = self.model.ask(prompt, response_mime_type="text/plain")
+        print(prompt)
+        plot[0].description = self.model.ask(prompt)
         window.append(plot[0])
       
         for event in plot[1:-1]:
@@ -435,12 +422,13 @@ class PlotMind:
             context = self.context_retriever.get_context([e.title for e in window])
             prompt = f"""
                 Eres un narrador experto de historias. Tu misión es generar un texto narrativo coherente para el siguiente evento.
+                Devuelve solo el texto narrativo de este evento, como se presentaría al lector, sin comentarios adicionales y en español.
                 El evento se titula {event.title} y se describe como: {event.description}
                 Redacta el texto de manera que sea coherente con el texto de los eventos anteriores, que es:
-                {", ".join([f"{e.description}" for e in window[:-1]])}
+                {", ".join([f"{e.description}" for e in list(window)[:-1]])}
                 Puedes introducir las ubicaciones, personajes e items haciendo breves descripciones de ellos ya que se presentan por primera vez, según consideres para no cargar el texto.
                 Las ubicaciones son: {[location.to_dict() for location in self.locations.values() if (location.name in event.locations and not locations_introduced[location.name])]}
-                Los personajes son: {[character.to_dict() for character in self.characters.values() if (character.name in event.characters_involved and not characters_introduced[character.name])]}
+                Los personajes son: {[character.describe_character_with_event(event.title) for character in self.characters.values() if (character.name in event.characters_involved and not characters_introduced[character.name])]}
                 Los items son: {[item.to_dict() for item in self.items.values() if (item.name in event.items_involved and not items_introduced[item.name])]}
                 La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {event.narrative_part}.
             """
@@ -457,15 +445,13 @@ class PlotMind:
             if len(future_context) > 0:
                 prompt += f"Eventos que van a ocurrir en el futuro (no mencionar directamente): {', '.join([c['text'] for c in future_context])}.\n"
 
-            prompt += f"La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {event.narrative_part}."
-
             if self.gender is not None:
                 prompt += f"El género de la historia es {self.gender}."
             if self.style is not None:
                 prompt += f"El estilo de la historia es {self.style}."
             if len(self.rules) > 0:
                 prompt += f"Ten en cuenta los siguientes deseos del autor: {', '.join(self.rules)}."
-            prompt += "Devuelve solo el texto narrativo como se presentaría al lector, sin comentarios adicionales y en español."
+            
 
             # Marcar los personajes, ubicaciones e items introducidos en el texto
             for c in event.characters_involved:
@@ -479,7 +465,8 @@ class PlotMind:
                     items_introduced[i] = True
             events_introduced[event.title] = True
 
-            event.description = self.model.ask(prompt, response_mime_type="text/plain")
+            print(prompt)
+            event.description = self.model.ask(prompt)
             
         # Añadir el último evento
         last_event = plot[-1]
@@ -488,12 +475,13 @@ class PlotMind:
 
         prompt = f"""
             Eres un narrador experto de historias. Tu misión es generar un texto narrativo coherente para el último evento de una historia.
+            Devuelve solo el texto narrativo de este evento y que dará fin a la historia, como se presentaría al lector, sin comentarios adicionales y en español.
             El evento se titula {last_event.title} y se describe como: {last_event.description}
             Redacta el texto de manera que sea coherente con el texto de los eventos anteriores, que es:
-            {", ".join([f"{e.description}" for e in window[:-1]])}
+            {", ".join([f"{e.description}" for e in list(window)[:-1]])}
             Las ubicaciones, personajes e items que aparecen en el evento se desciben a continuación.
             Las ubicaciones son: {[location.to_dict() for location in self.locations.values() if location.name in last_event.locations]}
-            Los personajes son: {[character.to_dict() for character in self.characters.values() if character.name in last_event.characters_involved]}
+            Los personajes son: {[character.describe_character_with_event(last_event.title) for character in self.characters.values() if character.name in last_event.characters_involved]}
             Los items son: {[item.to_dict() for item in self.items.values() if item.name in last_event.items_involved]}
             La narración debe seguir la estructura narrativa {self.narrative_structure} y este evento pertenece a {last_event.narrative_part}.
         """
@@ -505,15 +493,14 @@ class PlotMind:
             prompt += f"El estilo de la historia es {self.style}."
         if len(self.rules) > 0:
             prompt += f"Ten en cuenta los siguientes deseos del autor: {', '.join(self.rules)}."
-        prompt += "Devuelve solo el texto narrativo como se presentaría al lector y que dará fin a la historia, sin comentarios adicionales y en español."
 
-        plot[-1].description = self.model.ask(prompt, response_mime_type="text/plain")	
-
+        print(prompt)
+        plot[-1].description = self.model.ask(prompt)	
 
         # Guardar la historia en un archivo de texto
-        story = "".join([e.description for e in plot])	
+        story = ("\n\n\n").join([e.description for e in plot])	
 
-        with open("stories.txt", "w", encoding="utf-8") as archivo:
+        with open("stories.txt", "a", encoding="utf-8") as archivo:
             archivo.write(story)
 
 
