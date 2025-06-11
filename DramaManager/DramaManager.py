@@ -1,4 +1,5 @@
 from collections import deque
+import time
 from typing import Dict, List
 from ConversationalAgents.ConversationalAgent import ConversationalAgent
 from StorySpace.Character import Character
@@ -28,11 +29,12 @@ class DramaManager:
                 Story to analize:
                 {story}
             """
-            resp = self.model.ask(prompt)
+            resp = self.model.ask(prompt, temperature=0.8)
             return resp
         except Exception as e:
             print(f"Error al mejorar los personajes: {e}")
-        return ""
+            time.sleep(5)
+        return self.impove_characters(characters, story)
     
 
     def impove_locations(self, locations :List[Location], story: str)-> str:
@@ -52,11 +54,12 @@ class DramaManager:
                 Story to analize:
                 {story}
             """
-            resp = self.model.ask(prompt)
+            resp = self.model.ask(prompt, temperature=0.8)
             return resp
         except Exception as e:
             print(f"Error al mejorar los ubicaciones: {e}")
-        return ""
+            time.sleep(5)
+        return self.impove_locations(locations, story)
     
 
     def impove_items(self, items :List[Item], story: str)-> str:
@@ -76,11 +79,12 @@ class DramaManager:
                 Story to analize:
                 {story}
             """
-            resp = self.model.ask(prompt)
+            resp = self.model.ask(prompt, temperature=0.8)
             return resp
         except Exception as e:
             print(f"Error al mejorar los items: {e}")
-        return ""
+            time.sleep(5)
+        return self.impove_items(items, story)
     
 
     def simulate_character(self, character: Character, events: List[Event]) -> Character:
@@ -248,7 +252,7 @@ class DramaManager:
         prompt += f"{actions_summary}"
         
         try:
-            resp = self.model.ask(prompt)
+            resp = self.model.ask(prompt, temperature=0.7)
             response = self.model.clean_answer(resp)
             if response:
                 suggested_changes = response.get("suggested changes", [])
@@ -310,7 +314,7 @@ class DramaManager:
         """
         
         try:
-            response = self.model.ask(prompt)
+            response = self.model.ask(prompt, temperature=0.8)
             significant_events = self.model.clean_answer(response)
             significant_events = significant_events.get("significant_events", [])
             return [Event(**event) for event in significant_events]

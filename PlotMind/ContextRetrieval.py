@@ -112,38 +112,91 @@ class ContextRetrieval:
                 return self.model.encode(query, convert_to_tensor=False)
             
         
+    # @lru_cache(maxsize=1000)
+    # def retrieve_similar_events(self, 
+    #                           query: Union[str, List[str]], 
+    #                           k: int = 5,
+    #                           filter_func: Optional[callable] = None) -> List[Dict]:
+    #     """
+    #     Encuentra los k eventos más similares a la consulta.
+        
+    #     Args:
+    #         query: Consulta o lista de consultas
+    #         k: Número de resultados a devolver
+    #         filter_func: Función para filtrar por metadatos (e.g., lambda m: m['type'] == 'battle')
+            
+    #     Returns:
+    #         Lista de resultados con texto, similitud y metadatos
+    #     """
+    #     # Generar embedding de consulta
+    #     query_embedding = self._query_processing(query)
+    #     if len(query_embedding.shape) == 1:
+    #         query_embedding = query_embedding.reshape(1, -1)
+            
+    #     # Búsqueda en FAISS
+    #     distances, indices = self.index.search(query_embedding, k)
+        
+    #     # Procesar resultados
+    #     results = []
+    #     for idx, distance in zip(indices[0], distances[0]):
+    #         if idx < 0:
+    #             continue  # Índice inválido en FAISS
+                
+    #         event_data = self.faiss_id_to_event.get(idx)
+    #         if event_data:
+    #             # Aplicar filtro de metadatos
+    #             if filter_func and not filter_func(event_data['metadata']):
+    #                 continue
+                    
+    #             results.append({
+    #                 "text": event_data['text'],
+    #                 "similarity": float(distance),
+    #                 "metadata": event_data['metadata']
+    #             })
+        
+    #     return sorted(results, key=lambda x: x['similarity'], reverse=True)[:k]
+
     @lru_cache(maxsize=1000)
     def retrieve_similar_events(self, 
-                              query: Union[str, List[str]], 
-                              k: int = 5,
-                              filter_func: Optional[callable] = None) -> List[Dict]:
+                            query: Union[str, List[str]], 
+                            k: int = 5,
+                            filter_func: Optional[callable] = None,
+                            exclude_query_events: bool = True) -> List[Dict]:
         """
-        Encuentra los k eventos más similares a la consulta.
+        Encuentra los k eventos más similares a la consulta, excluyendo los eventos de consulta si se especifica.
         
         Args:
-            query: Consulta o lista de consultas
+            query: Consulta o lista de consultas (texto de eventos a comparar)
             k: Número de resultados a devolver
-            filter_func: Función para filtrar por metadatos (e.g., lambda m: m['type'] == 'battle')
+            filter_func: Función para filtrar por metadatos
+            exclude_query_events: Si True, excluye los eventos idénticos a la consulta
             
         Returns:
-            Lista de resultados con texto, similitud y metadatos
+            Lista de resultados con texto, similitud y metadatos (sin incluir consultas si exclude_query_events=True)
         """
         # Generar embedding de consulta
         query_embedding = self._query_processing(query)
         if len(query_embedding.shape) == 1:
             query_embedding = query_embedding.reshape(1, -1)
-            
-        # Búsqueda en FAISS
-        distances, indices = self.index.search(query_embedding, k)
+        
+        # Búsqueda ampliada en FAISS (buscar k + m para compensar exclusiones)
+        m = len(query.split('|')) if isinstance(query, str) else len(query)  # Número de eventos en consulta
+        distances, indices = self.index.search(query_embedding, k + m if exclude_query_events else k)
         
         # Procesar resultados
         results = []
+        query_texts = set([query] if isinstance(query, str) else query)  # Normalizar a conjunto
+        
         for idx, distance in zip(indices[0], distances[0]):
             if idx < 0:
                 continue  # Índice inválido en FAISS
                 
             event_data = self.faiss_id_to_event.get(idx)
             if event_data:
+                # Excluir eventos idénticos a la consulta
+                if exclude_query_events and event_data['text'] in query_texts:
+                    continue
+                    
                 # Aplicar filtro de metadatos
                 if filter_func and not filter_func(event_data['metadata']):
                     continue
@@ -154,6 +207,7 @@ class ContextRetrieval:
                     "metadata": event_data['metadata']
                 })
         
+        # Ordenar y devolver solo los k mejores (no consultas)
         return sorted(results, key=lambda x: x['similarity'], reverse=True)[:k]
     
     def get_context(self, 

@@ -71,6 +71,7 @@ class Character (Entity):
         self.flaws = flaws or []
         self.strengths = strengths or []
         self.actions = actions or {}
+        self.current_location = ""
         
         
     def description_summary(self) -> str:

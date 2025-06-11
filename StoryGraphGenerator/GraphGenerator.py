@@ -2,6 +2,7 @@ import os
 import networkx as nx
 import matplotlib.pyplot as plt
 from typing import Dict, List
+from StoryGraphGenerator.RelationshipManager import Relationship
 from StorySpace.Character import Character
 from StorySpace.Event import Event
 from pyvis.network import Network
@@ -107,6 +108,10 @@ class GraphGenerator:
             event,
             relation="appears_in",
         )
+
+    def add_entities_relation(self, relation: Relationship):
+        if relation.entity1 in self.graph.nodes and relation.entity2 in self.graph.nodes:
+            self.graph.add_edge(relation.entity1, relation.entity2, relation=relation.relationship_type, data=relation.to_dict())
 
     def add_prereq_relation(self, event1:str, event2:str):
         """
